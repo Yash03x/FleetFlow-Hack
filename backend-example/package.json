@@ -1,0 +1,27 @@
+{
+  "name": "hilti-bedrock-api",
+  "version": "1.0.0",
+  "description": "Backend API for AWS Bedrock integration with Hilti recommendations",
+  "main": "bedrock-api.js",
+  "scripts": {
+    "start": "node bedrock-api.js",
+    "dev": "nodemon bedrock-api.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "@aws-sdk/client-bedrock-runtime": "^3.450.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": [
+    "aws",
+    "bedrock",
+    "claude",
+    "hilti",
+    "recommendations"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}

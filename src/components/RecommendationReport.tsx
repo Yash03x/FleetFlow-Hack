@@ -1,15 +1,68 @@
 import React from 'react';
 import { ArrowLeft, Download, CheckCircle, TrendingUp, Shield, Clock, DollarSign, Users, Wrench, ExternalLink, Info } from 'lucide-react';
-import { ProjectData, ToolRecommendation, FleetContract } from '../types/ProjectData';
+import { ProjectData, ToolRecommendation } from '../types/ProjectData';
 import { generateRecommendations, generateFleetContract } from '../utils/recommendationEngine';
+import { generateBedrockRecommendations } from '../utils/bedrockClient';
 
 interface RecommendationReportProps {
   projectData: ProjectData;
   onBack: () => void;
 }
 
+// AWS Bedrock Integration Function
+const generateAIRecommendations = async (projectData: ProjectData): Promise<ToolRecommendation[]> => {
+  try {
+    // Use the real Bedrock client for recommendations
+    return await generateBedrockRecommendations(projectData);
+  } catch (error) {
+    console.error('AWS Bedrock recommendation generation failed:', error);
+    throw error;
+  }
+};
+
 const RecommendationReport: React.FC<RecommendationReportProps> = ({ projectData, onBack }) => {
-  const recommendations = generateRecommendations(projectData);
+  const [recommendations, setRecommendations] = React.useState<ToolRecommendation[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [useAI, setUseAI] = React.useState(false); // Start with false for testing
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const generateRecommendationsAsync = async () => {
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        if (useAI) {
+          // Check if AWS credentials are available
+          if (import.meta.env.VITE_AWS_ACCESS_KEY_ID && import.meta.env.VITE_AWS_SECRET_ACCESS_KEY) {
+            console.log('🤖 Using AWS Bedrock Converse API...');
+            const aiRecs = await generateAIRecommendations(projectData);
+            setRecommendations(aiRecs);
+          } else {
+            console.log('⚠️ AWS credentials not found, falling back to rule-based recommendations');
+            setError('AWS credentials not configured or invalid. Please check your VITE_AWS_ACCESS_KEY_ID and VITE_AWS_SECRET_ACCESS_KEY in your .env.local file.');
+            const ruleBasedRecs = generateRecommendations(projectData);
+            setRecommendations(ruleBasedRecs);
+          }
+        } else {
+          console.log('📊 Using rule-based recommendations...');
+          const ruleRecs = generateRecommendations(projectData);
+          setRecommendations(ruleRecs);
+        }
+      } catch (error) {
+        console.error('Recommendation generation failed:', error);
+        setError(`Failed to generate recommendations: ${error.message}. Using fallback system.`);
+        // Fallback to rule-based
+        const fallbackRecs = generateRecommendations(projectData);
+        setRecommendations(fallbackRecs);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    generateRecommendationsAsync();
+  }, [projectData, useAI]);
+
   const fleetContract = generateFleetContract(projectData, recommendations);
 
   const formatCurrency = (amount: number) => {
@@ -26,13 +79,48 @@ const RecommendationReport: React.FC<RecommendationReportProps> = ({ projectData
           <ArrowLeft className="h-5 w-5" />
           <span>Back to Form</span>
         </button>
-        <button className="flex items-center space-x-2 bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors">
-          <Download className="h-5 w-5" />
-          <span>Export Report</span>
-        </button>
+        <div className="flex items-center space-x-4">
+          {/* AI Toggle */}
+          <label className="flex items-center space-x-2 bg-white px-4 py-2 rounded-lg border border-gray-300 shadow-sm">
+            <input
+              type="checkbox"
+              checked={useAI}
+              onChange={(e) => setUseAI(e.target.checked)}
+              className="text-red-600 focus:ring-red-500 rounded"
+            />
+            <span className="text-sm font-medium text-gray-700">
+              {useAI ? '🤖 AWS Bedrock' : '📊 Rule-Based'}
+            </span>
+          </label>
+          <button className="flex items-center space-x-2 bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors">
+            <Download className="h-5 w-5" />
+            <span>Export Report</span>
+          </button>
+        </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+      {/* Loading and Error States */}
+      {isLoading && (
+        <div className="text-center py-8">
+          <div className="inline-flex items-center space-x-2 text-gray-600">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600"></div>
+            <span>{useAI ? 'Generating AWS Bedrock recommendations...' : 'Generating recommendations...'}</span>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center space-x-2 text-yellow-800">
+            <Info className="h-5 w-5" />
+            <span className="font-medium">Notice:</span>
+            <span>{error}</span>
+          </div>
+        </div>
+      )}
+
+      {!isLoading && (
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
         {/* Report Header */}
         <div className="bg-gradient-to-r from-red-600 to-red-700 px-8 py-8 text-white">
           <h1 className="text-4xl font-bold mb-4">Construction Site Analysis Report</h1>
@@ -319,6 +407,7 @@ const RecommendationReport: React.FC<RecommendationReportProps> = ({ projectData
           </section>
         </div>
       </div>
+      )}
     </div>
   );
 };
