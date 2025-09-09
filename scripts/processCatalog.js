@@ -155,38 +155,7 @@ async function processCatalog() {
       categoryIndex[category].push(product);
     });
 
-    // Save enhanced catalog
-    const outputPath = path.join(__dirname, '../src/data/hiltiCatalog.json');
-    const catalogData = {
-      metadata: {
-        totalProducts: enhancedCatalog.length,
-        categories: Object.keys(categoryIndex).length,
-        lastUpdated: new Date().toISOString(),
-        processingErrors: errors.length
-      },
-      products: enhancedCatalog,
-      categoryIndex: categoryIndex
-    };
-    
-    fs.writeFileSync(outputPath, JSON.stringify(catalogData, null, 2));
-    
-    
-    console.log(`💾 Saved enhanced catalog to ${outputPath}`);
-    console.log(`📊 Total products: ${enhancedCatalog.length}`);
-    console.log(`📋 Categories found: ${Object.keys(categoryIndex).length}`);
-    
-    // Show sample products by category
-    const sampleCategories = Object.keys(categoryIndex).slice(0, 5);
-    console.log('\n🔍 Sample products by category:');
-    sampleCategories.forEach(category => {
-      const products = categoryIndex[category];
-      console.log(`\n📂 ${category} (${products.length} products):`);
-      products.slice(0, 3).forEach(product => {
-        console.log(`  - ${product.name} (${product.sku})`);
-      });
-    });
-
-    // Create LLM-optimized catalog for better prompts
+    // Create LLM-optimized catalog for AI prompts (this is what the app actually uses)
     const llmCatalog = Object.keys(categoryIndex).map(category => ({
       category: category,
       productCount: categoryIndex[category].length,
@@ -202,15 +171,29 @@ async function processCatalog() {
       }))
     }));
 
-    // Save LLM-optimized catalog separately
+    // Save only the LLM-optimized catalog (this is what bedrockClient.ts uses)
     const llmOutputPath = path.join(__dirname, '../src/data/hiltiCatalogLLM.json');
     fs.writeFileSync(llmOutputPath, JSON.stringify(llmCatalog, null, 2));
     console.log(`🤖 Saved LLM-optimized catalog to ${llmOutputPath}`);
 
+    console.log(`📊 Total products: ${enhancedCatalog.length}`);
+    console.log(`📋 Categories found: ${Object.keys(categoryIndex).length}`);
+    
+    // Show sample products by category
+    const sampleCategories = Object.keys(categoryIndex).slice(0, 5);
+    console.log('\n🔍 Sample products by category:');
+    sampleCategories.forEach(category => {
+      const products = categoryIndex[category];
+      console.log(`\n📂 ${category} (${products.length} products):`);
+      products.slice(0, 3).forEach(product => {
+        console.log(`  - ${product.name} (${product.sku})`);
+      });
+    });
+
     // Generate summary stats
     console.log('\n📈 Processing Summary:');
     console.log(`✅ Total products processed: ${enhancedCatalog.length}`);
-    console.log(`�️  Categories identified: ${Object.keys(categoryIndex).length}`);
+    console.log(`🗂️  Categories identified: ${Object.keys(categoryIndex).length}`);
     console.log(`❌ Processing errors: ${errors.length}`);
     
     if (errors.length > 0) {

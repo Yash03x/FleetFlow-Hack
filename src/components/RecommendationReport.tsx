@@ -1,8 +1,9 @@
 import React from 'react';
 import { ArrowLeft, Download, CheckCircle, TrendingUp, Shield, Clock, DollarSign, Users, Wrench, ExternalLink, Info } from 'lucide-react';
 import { ProjectData, ToolRecommendation } from '../types/ProjectData';
-import { generateRecommendations, generateFleetContract } from '../utils/recommendationEngine';
+import { generateRecommendations } from '../utils/recommendationEngine';
 import { generateBedrockRecommendations } from '../utils/bedrockClient';
+import { calculateProjectMetrics, generateAccurateFleetContract, formatCurrency, formatPercentage } from '../utils/accurateCalculations';
 
 interface RecommendationReportProps {
   projectData: ProjectData;
@@ -64,11 +65,20 @@ const RecommendationReport: React.FC<RecommendationReportProps> = ({ projectData
     generateRecommendationsAsync();
   }, [projectData, useAI]);
 
-  const fleetContract = generateFleetContract(projectData, recommendations);
+  // Calculate accurate metrics after recommendations are loaded
+  const projectMetrics = React.useMemo(() => {
+    if (recommendations.length > 0) {
+      return calculateProjectMetrics(projectData, recommendations);
+    }
+    return null;
+  }, [projectData, recommendations]);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-  };
+  const fleetContract = React.useMemo(() => {
+    if (recommendations.length > 0) {
+      return generateAccurateFleetContract(projectData, recommendations);
+    }
+    return null;
+  }, [projectData, recommendations]);
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -166,8 +176,8 @@ const RecommendationReport: React.FC<RecommendationReportProps> = ({ projectData
                 Based on our AI analysis of your <strong>{projectData.projectType}</strong> project in <strong>{projectData.location}</strong>, 
                 we recommend a comprehensive Hilti fleet solution that will optimize productivity, ensure safety, and deliver cost savings. 
                 Our recommendation includes <strong>{recommendations.length} specialized tools</strong> for your {projectData.laborCount}-person team 
-                over the {projectData.timeline}-month timeline, resulting in an estimated <strong>25% increase in productivity</strong> and 
-                <strong>30% reduction in equipment-related downtime</strong>.
+                over the {projectData.timeline}-month timeline, resulting in an estimated <strong>{projectMetrics ? formatPercentage(projectMetrics.productivityIncrease) : '25%'} increase in productivity</strong> and 
+                <strong>{projectMetrics ? formatPercentage(projectMetrics.downtimeReduction) : '30%'} reduction in equipment-related downtime</strong>.
               </p>
             </div>
           </section>
@@ -295,15 +305,15 @@ const RecommendationReport: React.FC<RecommendationReportProps> = ({ projectData
             <div className="bg-gradient-to-r from-red-600 to-red-700 rounded-xl p-8 text-white mb-6">
               <div className="grid md:grid-cols-3 gap-6">
                 <div className="text-center">
-                  <div className="text-3xl font-bold mb-2">{formatCurrency(fleetContract.totalCost)}</div>
+                  <div className="text-3xl font-bold mb-2">{fleetContract ? formatCurrency(fleetContract.totalCost) : formatCurrency(0)}</div>
                   <div className="text-red-100">Total Contract Value</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-3xl font-bold mb-2">{formatCurrency(fleetContract.monthlyCost)}</div>
+                  <div className="text-3xl font-bold mb-2">{fleetContract ? formatCurrency(fleetContract.monthlyCost) : formatCurrency(0)}</div>
                   <div className="text-red-100">Monthly Payment</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-3xl font-bold mb-2">{formatCurrency(fleetContract.estimatedSavings)}</div>
+                  <div className="text-3xl font-bold mb-2">{fleetContract ? formatCurrency(fleetContract.estimatedSavings) : formatCurrency(0)}</div>
                   <div className="text-red-100">Estimated Savings vs. Purchase</div>
                 </div>
               </div>
@@ -316,12 +326,14 @@ const RecommendationReport: React.FC<RecommendationReportProps> = ({ projectData
                   Contract Benefits
                 </h3>
                 <ul className="space-y-3">
-                  {fleetContract.benefits.map((benefit, index) => (
+                  {fleetContract?.benefits.map((benefit, index) => (
                     <li key={index} className="flex items-start text-gray-700">
                       <CheckCircle className="h-4 w-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
                       {benefit}
                     </li>
-                  ))}
+                  )) || (
+                    <li className="text-gray-500">Loading contract benefits...</li>
+                  )}
                 </ul>
               </div>
 
@@ -330,7 +342,7 @@ const RecommendationReport: React.FC<RecommendationReportProps> = ({ projectData
                 <div className="space-y-3 text-gray-700">
                   <div className="flex justify-between">
                     <span>Contract Duration:</span>
-                    <span className="font-semibold">{fleetContract.duration} months</span>
+                    <span className="font-semibold">{fleetContract?.duration || projectData.timeline} months</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Payment Terms:</span>
@@ -366,19 +378,19 @@ const RecommendationReport: React.FC<RecommendationReportProps> = ({ projectData
                   <div className="space-y-3">
                     <div className="flex justify-between py-2 border-b border-gray-200">
                       <span className="text-gray-600">Equipment Cost Savings:</span>
-                      <span className="font-semibold text-green-600">{formatCurrency(fleetContract.estimatedSavings)}</span>
+                      <span className="font-semibold text-green-600">{formatCurrency(fleetContract?.estimatedSavings || 0)}</span>
                     </div>
                     <div className="flex justify-between py-2 border-b border-gray-200">
-                      <span className="text-gray-600">Productivity Increase (25%):</span>
-                      <span className="font-semibold text-green-600">{formatCurrency(Math.round(projectData.budget * 0.15))}</span>
+                      <span className="text-gray-600">Productivity Increase ({projectMetrics ? formatPercentage(projectMetrics.productivityIncrease) : '25%'}):</span>
+                      <span className="font-semibold text-green-600">{formatCurrency(projectMetrics?.laborSavings || Math.round(projectData.budget * 0.15))}</span>
                     </div>
                     <div className="flex justify-between py-2 border-b border-gray-200">
                       <span className="text-gray-600">Reduced Downtime Savings:</span>
-                      <span className="font-semibold text-green-600">{formatCurrency(Math.round(projectData.budget * 0.08))}</span>
+                      <span className="font-semibold text-green-600">{formatCurrency(projectMetrics?.downtimeSavings || Math.round(projectData.budget * 0.08))}</span>
                     </div>
                     <div className="flex justify-between py-3 border-t-2 border-gray-300 font-bold text-lg">
                       <span>Total ROI:</span>
-                      <span className="text-green-600">{formatCurrency(fleetContract.estimatedSavings + Math.round(projectData.budget * 0.23))}</span>
+                      <span className="text-green-600">{formatCurrency(projectMetrics?.totalROI || (fleetContract?.estimatedSavings || 0) + Math.round(projectData.budget * 0.23))}</span>
                     </div>
                   </div>
                 </div>
@@ -387,11 +399,11 @@ const RecommendationReport: React.FC<RecommendationReportProps> = ({ projectData
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">Operational Benefits</h3>
                   <div className="space-y-3">
                     <div className="bg-white rounded-lg p-4">
-                      <div className="font-semibold text-red-600">25% Faster Project Completion</div>
+                      <div className="font-semibold text-red-600">{projectMetrics ? formatPercentage(projectMetrics.productivityIncrease) : '25%'} Faster Project Completion</div>
                       <p className="text-sm text-gray-600 mt-1">Advanced tools and technology reduce task time</p>
                     </div>
                     <div className="bg-white rounded-lg p-4">
-                      <div className="font-semibold text-blue-600">50% Reduction in Equipment Issues</div>
+                      <div className="font-semibold text-blue-600">{projectMetrics ? formatPercentage(projectMetrics.downtimeReduction) : '30%'} Reduction in Equipment Issues</div>
                       <p className="text-sm text-gray-600 mt-1">Professional maintenance and quality assurance</p>
                     </div>
                     <div className="bg-white rounded-lg p-4">
