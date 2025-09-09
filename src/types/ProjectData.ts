@@ -23,6 +23,8 @@ export interface ToolRecommendation {
   category: string;
   productUrl: string;
   specifications: string[];
+  competitiveAdvantages?: string[];
+  id?: string;
 }
 
 export interface FleetContract {

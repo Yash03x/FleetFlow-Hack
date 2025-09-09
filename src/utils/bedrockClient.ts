@@ -4,6 +4,9 @@
 import { BedrockRuntimeClient, ConverseCommand } from '@aws-sdk/client-bedrock-runtime';
 import { ProjectData, ToolRecommendation } from '../types/ProjectData';
 
+// Import the processed Hilti catalog
+import hiltiCatalogData from '../data/hiltiCatalogLLM.json';
+
 // AWS Bedrock configuration
 const BEDROCK_CONFIG = {
   region: 'eu-central-1',
@@ -13,10 +16,83 @@ const BEDROCK_CONFIG = {
   topP: 0.9
 };
 
-// Create the prompt for Bedrock
+// Filter products by project relevance
+const getRelevantProducts = (projectData: ProjectData): any[] => {
+  const { projectType } = projectData;
+  
+  // Define relevant categories based on project type
+  const categoryMap: Record<string, string[]> = {
+    'residential': [
+      'Rotary hammers', 'Hammer drills', 'Circular saws', 'Angle grinders',
+      'Measuring tools', 'Safety equipment', 'Fastening systems'
+    ],
+    'commercial': [
+      'Rotary hammers', 'Demolition hammers', 'Cut-off saws', 'Angle grinders',
+      'Laser levels', 'Measuring tools', 'Safety equipment', 'Fastening systems',
+      'Dust management systems', 'Core drilling'
+    ],
+    'infrastructure': [
+      'Demolition hammers', 'Cut-off saws', 'Core drilling', 'Rotary hammers',
+      'Heavy-duty equipment', 'Safety equipment', 'Measuring tools'
+    ],
+    'industrial': [
+      'Heavy-duty equipment', 'Industrial tools', 'Safety equipment',
+      'Measuring tools', 'Fastening systems', 'Dust management systems'
+    ],
+    'renovation': [
+      'Demolition hammers', 'Rotary hammers', 'Dust management systems',
+      'Safety equipment', 'Measuring tools', 'Cut-off saws'
+    ],
+    'roadwork': [
+      'Cut-off saws', 'Core drilling', 'Heavy-duty equipment',
+      'Safety equipment', 'Measuring tools'
+    ]
+  };
+
+  const relevantCategories = categoryMap[projectType] || categoryMap['commercial'];
+  
+  // Filter products by relevant categories
+  const relevantProducts: any[] = [];
+  
+  hiltiCatalogData.forEach(categoryData => {
+    const isRelevantCategory = relevantCategories.some(relCat => 
+      categoryData.category.toLowerCase().includes(relCat.toLowerCase()) ||
+      relCat.toLowerCase().includes(categoryData.category.toLowerCase())
+    );
+    
+    if (isRelevantCategory) {
+      // Add top products from this category
+      const topProducts = categoryData.products
+        .filter(product => product.description && product.technicalSpecs.length > 0)
+        .slice(0, 3); // Limit to top 3 products per category to manage prompt size
+      
+      relevantProducts.push(...topProducts.map(product => ({
+        ...product,
+        category: categoryData.category
+      })));
+    }
+  });
+
+  return relevantProducts.slice(0, 30); // Limit total products to manage prompt size
+};
+
+// Create the enhanced prompt for Bedrock with actual product data
 const createBedrockPrompt = (projectData: ProjectData): string => {
+  const relevantProducts = getRelevantProducts(projectData);
+  
+  // Build product catalog section
+  const productCatalogSection = relevantProducts.map(product => `
+**${product.name}** (${product.sku})
+- Category: ${product.category}
+- Description: ${product.description}
+- URL: ${product.url}
+${product.features.length > 0 ? `- Features: ${product.features.join('; ')}` : ''}
+${product.applications.length > 0 ? `- Applications: ${product.applications.join('; ')}` : ''}
+${product.technicalSpecs.length > 0 ? `- Technical Specs: ${product.technicalSpecs.slice(0, 3).join('; ')}` : ''}
+`).join('\n');
+
   return `
-You are a construction equipment expert specializing in Hilti tools and equipment. Analyze this construction project and recommend the optimal tool selection.
+You are a construction equipment expert specializing in Hilti tools and equipment. Analyze this construction project and recommend the optimal tool selection from the ACTUAL HILTI PRODUCT CATALOG provided below.
 
 ## PROJECT INPUT:
 - **Project Name**: ${projectData.projectName}
@@ -24,69 +100,65 @@ You are a construction equipment expert specializing in Hilti tools and equipmen
 - **Project Location**: ${projectData.location}
 - **Number of Laborers**: ${projectData.laborCount}
 - **Timeline (months)**: ${projectData.timeline}
-- **Budget Range ($)**: $${projectData.budget}
+- **Budget Range ($)**: $${projectData.budget.toLocaleString()}
 - **Project Complexity**: ${projectData.projectComplexity}
-- **Existing Tools & Equipment**: ${projectData.existingTools.join(', ')}
-- **Special Requirements or Notes**: ${projectData.specialRequirements}
+- **Existing Tools & Equipment**: ${projectData.existingTools.join(', ') || 'None specified'}
+- **Special Requirements**: ${projectData.specialRequirements || 'None specified'}
+
+## AVAILABLE HILTI PRODUCTS:
+${productCatalogSection}
 
 ## TASK:
-Select the most appropriate tools for this ${projectData.projectType} project with ${projectData.laborCount} workers over ${projectData.timeline} months.
+From the ACTUAL HILTI PRODUCTS listed above, select the most appropriate tools for this ${projectData.projectType} project with ${projectData.laborCount} workers over ${projectData.timeline} months. 
+
+## SELECTION CRITERIA:
+1. **Match project requirements**: Choose tools that directly address the project type and complexity
+2. **Avoid existing tools**: Do not recommend tools already owned: ${projectData.existingTools.join(', ') || 'None'}
+3. **Budget constraints**: Stay within the $${projectData.budget.toLocaleString()} budget
+4. **Team efficiency**: Consider ${projectData.laborCount} workers and ${projectData.timeline} month timeline
+5. **Real Hilti products**: ONLY recommend products from the catalog above
 
 ## RESPONSE FORMAT (JSON):
 {
   "recommendations": [
     {
-      "name": "string - tool name",
-      "model": "string - model number",
-      "description": "string - brief description",
+      "name": "string - exact product name from catalog",
+      "model": "string - exact SKU from catalog", 
+      "description": "string - description from catalog",
       "quantity": number,
       "rentalDuration": ${projectData.timeline},
       "monthlyCost": number,
       "totalCost": number,
-      "productUrl": "string - Hilti product URL",
+      "productUrl": "string - exact URL from catalog",
       "specifications": [
-        "string - key spec 1",
-        "string - key spec 2", 
-        "string - key spec 3",
-        "string - key spec 4"
+        "string - technical spec 1",
+        "string - technical spec 2", 
+        "string - technical spec 3",
+        "string - technical spec 4"
       ],
       "justification": [
-        "string - why this tool 1",
-        "string - why this tool 2",
-        "string - why this tool 3",
-        "string - why this tool 4",
-        "string - why this tool 5"
+        "string - why this tool fits project requirements",
+        "string - how it addresses project complexity",
+        "string - productivity benefit for team size",
+        "string - timeline efficiency benefit",
+        "string - competitive advantage"
       ],
       "competitiveAdvantages": [
-        "string - advantage 1",
-        "string - advantage 2", 
-        "string - advantage 3"
+        "string - Hilti advantage 1",
+        "string - Hilti advantage 2", 
+        "string - Hilti advantage 3"
       ]
     }
   ]
 }
 
 ## CONSTRAINTS:
-- Maximum 10 tool recommendations
-- Stay within $${projectData.budget} budget
-- Avoid duplicating existing tools: ${projectData.existingTools.join(', ')}
-- Match complexity level: ${projectData.projectComplexity}
-- Consider team size: ${projectData.laborCount} workers
+- Maximum 8 tool recommendations
+- Stay within $${projectData.budget.toLocaleString()} budget
+- ONLY use products from the catalog provided above
+- Use exact product names, SKUs, and URLs from the catalog
 - Each tool must have exactly 4 specifications, 5 justifications, and 3 competitive advantages
-
-## TOOL SELECTION CRITERIA:
-For ${projectData.projectType} construction with ${projectData.laborCount} workers over ${projectData.timeline} months:
-1. **Drilling Tools**: Rotary hammers, hammer drills for concrete work
-2. **Cutting Tools**: Angle grinders, circular saws for material cutting
-3. **Measuring Tools**: Laser levels, distance meters for precision work
-4. **Fastening Tools**: Powder-actuated tools, anchor systems
-5. **Safety Equipment**: Dust management, safety systems
-6. **Accessories**: Drill bits, blades, consumables
-
-## COST CALCULATIONS:
-- Monthly rental rates: $50-300 per tool depending on type
-- Calculate totalCost = monthlyCost × rentalDuration
-- Ensure total fleet cost stays within budget
+- Consider monthly rental rates: Basic tools $50-150, Professional tools $150-400, Heavy equipment $400-800
 
 Provide your analysis in valid JSON format that matches the structure above exactly.
 `;
@@ -101,21 +173,21 @@ const bedrockClient = new BedrockRuntimeClient({
   },
 });
 
-// Real AWS Bedrock integration using Converse API
+// Main function to generate recommendations with enhanced catalog integration
 export const generateBedrockRecommendations = async (projectData: ProjectData): Promise<ToolRecommendation[]> => {
   try {
-    console.log('🤖 Using AWS Bedrock Converse API...');
-    console.log('📍 Region:', BEDROCK_CONFIG.region);
-    console.log('🎯 Model ID:', BEDROCK_CONFIG.modelId);
-    
+    console.log('🤖 Generating AI recommendations using AWS Bedrock...');
+    console.log('� Project details:', {
+      type: projectData.projectType,
+      workers: projectData.laborCount,
+      timeline: projectData.timeline,
+      budget: projectData.budget
+    });
+
+    // Create enhanced prompt with actual product catalog
     const prompt = createBedrockPrompt(projectData);
-    
-    // Log the complete prompt being sent
-    console.log('📤 PROMPT SENT TO MODEL:');
-    console.log('=' .repeat(80));
-    console.log(prompt);
-    console.log('=' .repeat(80));
-    
+    console.log('📝 Enhanced prompt created with real Hilti product catalog');
+
     // Create conversation with the user message
     const conversation = [
       {
@@ -124,8 +196,8 @@ export const generateBedrockRecommendations = async (projectData: ProjectData): 
       }
     ];
 
-    // Log the complete request payload
-    const requestPayload = {
+    // Create a command with the model ID, the message, and configuration
+    const command = new ConverseCommand({
       modelId: BEDROCK_CONFIG.modelId,
       messages: conversation,
       inferenceConfig: { 
@@ -133,84 +205,66 @@ export const generateBedrockRecommendations = async (projectData: ProjectData): 
         temperature: BEDROCK_CONFIG.temperature,
         topP: BEDROCK_CONFIG.topP
       }
-    };
-    
-    console.log('📦 REQUEST PAYLOAD:');
-    console.log('=' .repeat(80));
-    console.log(JSON.stringify(requestPayload, null, 2));
-    console.log('=' .repeat(80));
+    });
 
-    // Create a command with the model ID, the message, and configuration
-    const command = new ConverseCommand(requestPayload);
-
-    console.log('🚀 Sending request to AWS Bedrock...');
-    const startTime = Date.now();
-    
     // Send the command to the model and wait for the response
+    console.log('🚀 Sending request to AWS Bedrock...');
     const response = await bedrockClient.send(command);
     
-    const endTime = Date.now();
-    const duration = endTime - startTime;
-    console.log(`⏱️ Response received in ${duration}ms`);
-    
-    // Log the complete response
-    console.log('📥 COMPLETE RESPONSE FROM MODEL:');
-    console.log('=' .repeat(80));
-    console.log(JSON.stringify(response, null, 2));
-    console.log('=' .repeat(80));
-    
-    // Extract the response text with proper null checks
-    if (!response.output?.message?.content?.[0]?.text) {
-      console.error('❌ Invalid response format - missing text content');
-      console.error('Response structure:', response);
-      throw new Error('Invalid response format from Bedrock');
+    // Extract the response text
+    const responseText = response.output?.message?.content?.[0]?.text;
+    if (!responseText) {
+      throw new Error('No response text received from Bedrock');
     }
-    
-    const responseText = response.output.message.content[0].text;
-    console.log('📝 RAW TEXT RESPONSE:');
-    console.log('=' .repeat(80));
-    console.log(responseText);
-    console.log('=' .repeat(80));
-    
+
+    console.log('✅ Received response from AWS Bedrock');
+    console.log('📄 Response length:', responseText.length, 'characters');
+
     // Parse the JSON response
-    let llmResponse;
+    let recommendations: ToolRecommendation[];
     try {
-      llmResponse = JSON.parse(responseText);
-      console.log('✅ Successfully parsed JSON response');
-    } catch (parseError) {
-      console.error('❌ Failed to parse JSON response:');
-      console.error('Parse error:', parseError);
-      console.error('Raw text that failed to parse:', responseText);
-      throw new Error(`Failed to parse JSON response: ${parseError.message}`);
+      const parsed = JSON.parse(responseText);
+      recommendations = parsed.recommendations || [];
+    } catch (parseError: unknown) {
+      console.error('❌ Failed to parse JSON response:', parseError);
+      console.error('Raw response:', responseText.substring(0, 500));
+      const errorMessage = parseError instanceof Error ? parseError.message : 'Unknown parsing error';
+      throw new Error(`Failed to parse JSON response: ${errorMessage}`);
+    }
+
+    console.log(`� Generated ${recommendations.length} tool recommendations`);
+    
+    // Validate and enhance recommendations
+    const validatedRecommendations = recommendations.map((rec, index) => ({
+      ...rec,
+      id: `bedrock-rec-${index}`,
+      quantity: rec.quantity || 1,
+      rentalDuration: rec.rentalDuration || projectData.timeline,
+      monthlyCost: rec.monthlyCost || 200, // Default fallback
+      totalCost: rec.totalCost || (rec.monthlyCost || 200) * (rec.rentalDuration || projectData.timeline),
+      specifications: rec.specifications || [],
+      justification: rec.justification || [],
+      competitiveAdvantages: rec.competitiveAdvantages || []
+    }));
+
+    return validatedRecommendations;
+
+  } catch (error: unknown) {
+    console.error('❌ AWS Bedrock API Error:', error);
+    if (error instanceof Error) {
+      console.error('Error type:', error.constructor.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
+    if (typeof error === 'object' && error !== null && '$metadata' in error) {
+      console.error('AWS metadata:', (error as any).$metadata);
     }
     
-    console.log('📊 PARSED RECOMMENDATIONS:');
-    console.log('=' .repeat(80));
-    console.log(JSON.stringify(llmResponse, null, 2));
-    console.log('=' .repeat(80));
-    
-    // Validate the response structure
-    if (!llmResponse.recommendations || !Array.isArray(llmResponse.recommendations)) {
-      console.error('❌ Invalid response structure - missing recommendations array');
-      console.error('Response structure:', llmResponse);
-      throw new Error('Invalid response structure - missing recommendations array');
-    }
-    
-    console.log(`✅ Successfully received ${llmResponse.recommendations.length} recommendations`);
-    
-    return llmResponse.recommendations;
-    
-  } catch (error) {
-    console.error('❌ AWS Bedrock Converse API error:');
-    console.error('Error type:', error.constructor.name);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
-    if (error.$metadata) {
-      console.error('AWS metadata:', error.$metadata);
-    }
-    throw error;
+    throw new Error(`AWS Bedrock API failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };
+
+export default generateBedrockRecommendations;
 
 // Option 2: Direct Bedrock call (requires proper AWS SDK setup)
 export const generateBedrockRecommendationsDirect = async (projectData: ProjectData): Promise<ToolRecommendation[]> => {

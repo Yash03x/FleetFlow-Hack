@@ -49,9 +49,10 @@ const RecommendationReport: React.FC<RecommendationReportProps> = ({ projectData
           const ruleRecs = generateRecommendations(projectData);
           setRecommendations(ruleRecs);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Recommendation generation failed:', error);
-        setError(`Failed to generate recommendations: ${error.message}. Using fallback system.`);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        setError(`Failed to generate recommendations: ${errorMessage}. Using fallback system.`);
         // Fallback to rule-based
         const fallbackRecs = generateRecommendations(projectData);
         setRecommendations(fallbackRecs);
@@ -195,7 +196,32 @@ const RecommendationReport: React.FC<RecommendationReportProps> = ({ projectData
                         </a>
                       </div>
                       <div className="text-sm text-gray-500 mb-2 font-mono">Model: {tool.model}</div>
-                      <p className="text-gray-600 mb-3">{tool.description}</p>
+                      <p className="text-gray-600 mb-4">{tool.description}</p>
+                      
+                      {/* Enhanced Product Features Display */}
+                      {tool.specifications && tool.specifications.length > 0 && (
+                        <div className="mb-4">
+                          <h4 className="text-sm font-semibold text-gray-700 mb-2">Key Specifications:</h4>
+                          <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
+                            {tool.specifications.slice(0, 4).map((spec, specIndex) => (
+                              <li key={specIndex}>{spec}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
+                      {/* Competitive Advantages */}
+                      {tool.competitiveAdvantages && tool.competitiveAdvantages.length > 0 && (
+                        <div className="mb-4">
+                          <h4 className="text-sm font-semibold text-gray-700 mb-2">Hilti Advantages:</h4>
+                          <ul className="list-disc list-inside text-sm text-green-600 space-y-1">
+                            {tool.competitiveAdvantages.slice(0, 3).map((advantage, advIndex) => (
+                              <li key={advIndex}>{advantage}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      
                       <div className="flex items-center space-x-4 text-sm text-gray-500">
                         <span>Quantity: <strong className="text-gray-900">{tool.quantity}</strong></span>
                         <span>Duration: <strong className="text-gray-900">{tool.rentalDuration} months</strong></span>
