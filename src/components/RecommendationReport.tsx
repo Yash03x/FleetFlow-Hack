@@ -24,7 +24,7 @@ const generateAIRecommendations = async (projectData: ProjectData): Promise<Tool
 const RecommendationReport: React.FC<RecommendationReportProps> = ({ projectData, onBack }) => {
   const [recommendations, setRecommendations] = React.useState<ToolRecommendation[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
-  const [useAI, setUseAI] = React.useState(false); // Start with false for testing
+  const [useAI, setUseAI] = React.useState(true); // Start with Bedrock by default
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {

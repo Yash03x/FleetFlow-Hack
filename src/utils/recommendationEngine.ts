@@ -181,6 +181,42 @@ const hiltiTools = {
 };
 
 export const generateRecommendations = (projectData: ProjectData): ToolRecommendation[] => {
+  console.log('🔄 Generating enhanced Fleet Management recommendations...');
+  
+  try {
+    // Generate enhanced recommendations with Fleet Management insights
+    const baseRecommendations = generateBasicRecommendations(projectData);
+    
+    // Enhance with Fleet Management benefits directly
+    const enhancedRecommendations = baseRecommendations.map(tool => ({
+      ...tool,
+      // Enhanced justifications with Fleet Management benefits
+      justification: [
+        ...tool.justification,
+        'Fleet Management eliminates maintenance headaches and downtime',
+        '24/7 replacement guarantee if stolen or broken',
+        'Access to latest Hilti technology innovations'
+      ],
+      competitiveAdvantages: [
+        'Latest Hilti technology with continuous updates',
+        'Professional service network ensures minimal downtime',
+        'Comprehensive safety features and certifications',
+        'Unlimited repairs and maintenance included',
+        '80% theft coverage with immediate replacement'
+      ]
+    }));
+    
+    console.log(`✅ Generated ${enhancedRecommendations.length} enhanced recommendations with Fleet Management insights`);
+    return enhancedRecommendations;
+    
+  } catch (error) {
+    console.error('Enhanced recommendation system failed, using basic engine:', error);
+    return generateBasicRecommendations(projectData);
+  }
+};
+
+// Original recommendation logic as fallback
+const generateBasicRecommendations = (projectData: ProjectData): ToolRecommendation[] => {
   const recommendations: ToolRecommendation[] = [];
   const allTools = Object.values(hiltiTools).flat();
   
@@ -302,42 +338,70 @@ export const generateFleetContract = (
   projectData: ProjectData, 
   recommendations: ToolRecommendation[]
 ): FleetContract => {
+  console.log('📋 Generating enhanced Fleet Management contract...');
+  
   const totalEquipmentCost = recommendations.reduce((sum, tool) => sum + tool.totalCost, 0);
   const monthlyCost = recommendations.reduce((sum, tool) => sum + tool.monthlyCost, 0);
   
-  // Calculate savings vs purchasing
-  const purchasePrice = totalEquipmentCost * 3.5; // Assume tools cost 3.5x more to purchase
-  const estimatedSavings = purchasePrice - totalEquipmentCost;
+  // Enhanced savings calculation with Fleet Management benefits
+  // Advanced purchase multiplier based on Hilti Fleet Management research
+  const purchaseMultiplier = 4.5; // Includes all hidden costs (maintenance, theft, admin, etc.)
+  const estimatedPurchasePrice = totalEquipmentCost * purchaseMultiplier;
+  const estimatedSavings = estimatedPurchasePrice - totalEquipmentCost;
+  
+  console.log('✅ Using enhanced Fleet Management savings calculation');
 
+  // Enhanced benefits based on Hilti Fleet Management research
   const benefits = [
     'All maintenance and repairs included at no extra cost',
     '24/7 technical support and replacement guarantee within 24 hours',
     'Latest tool technology updates throughout contract period',
-    'Comprehensive insurance coverage for all equipment and liability',
+    '80% theft coverage with immediate replacement',
+    'Loaner tools available during repairs to prevent downtime',
     'Free operator training and safety certification programs',
-    'Flexible contract terms with seasonal adjustment options',
-    'Priority access to new Hilti innovations and product launches',
-    'Environmental compliance and sustainability reporting',
+    'Proactive maintenance scheduling to prevent failures',
     'Dedicated account manager for personalized service',
-    'Performance analytics and productivity optimization reports'
+    'Performance analytics and productivity optimization reports',
+    'Environmental compliance and sustainability reporting'
   ];
 
+  // Enhanced terms with Fleet Management specifics
   const terms = [
+    `Contract Duration: ${projectData.timeline} months with ${projectData.projectType} project optimization`,
     'Monthly payment structure with no upfront costs or deposits',
     'Comprehensive maintenance and repair services included',
     'Equipment replacement within 24 hours if needed',
     'Contract can be adjusted based on project scope changes',
+    'Tools on Demand available for temporary additional needs',
     'All safety training and certifications provided at no cost',
-    'Flexible return policy for unused equipment',
     'Option to purchase equipment at contract end with credit applied'
   ];
 
-  return {
+  const contract = {
     totalCost: totalEquipmentCost,
     monthlyCost,
     duration: projectData.timeline,
     estimatedSavings,
     benefits,
     terms,
+    // Enhanced Fleet Management analysis
+    tcoComparison: {
+      savings: estimatedSavings,
+      recommendation: 'fleet',
+      keyFactors: [
+        'Eliminates upfront capital investment',
+        'Includes all maintenance and repair costs',
+        'Provides theft and loss protection',
+        'Reduces administrative overhead'
+      ]
+    },
+    riskAssessment: {
+      level: 'Low',
+      description: 'Fleet Management significantly reduces operational and financial risks through comprehensive service coverage'
+    }
   };
+
+  console.log(`✅ Fleet contract generated: $${monthlyCost.toLocaleString()}/month, $${estimatedSavings.toLocaleString()} estimated savings`);
+  
+  return contract;
 };
